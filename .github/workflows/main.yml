@@ -26,7 +26,7 @@ jobs:
     - name: Install dependencies and build package
       run: |
         pip install -r requirements.txt -t package
-        cp lambda_function.py healthagent.py package/
+        cp lambda_function.py systemprompt.txt healthagent.py package/
         cd package
         zip -r ../function.zip .
         cd ..
