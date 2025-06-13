@@ -5,6 +5,7 @@ import json
 from strands import Agent
 from getPatient import tools  # your imported tools
 
+
 def lambda_handler(event, context):
     try:
         # Load system prompt
