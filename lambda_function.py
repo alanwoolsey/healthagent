@@ -3,8 +3,8 @@
 import os
 import json
 from strands import Agent
-from getPatient import tools  # your imported tools
-
+from strands.tools.mcp.mcp_client import MCPClient
+from mcp import stdio_client, StdioServerParameters
 
 def lambda_handler(event, context):
     try:
@@ -20,8 +20,11 @@ def lambda_handler(event, context):
         else:
             body = event
         user_message = body.get("message", "Hello!")
-
+        params = StdioServerParameters(command="python", args=["getPatient.py"])
+        mcp_client = MCPClient(lambda: stdio_client(params))
+        mcp_client.__enter__()
         # Instantiate agent with tools
+        tools = mcp_client.list_tools_sync()
         agent = Agent(tools=tools, system_prompt=system_prompt)
         result = agent(user_message)
 
