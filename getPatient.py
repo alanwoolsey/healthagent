@@ -1,10 +1,7 @@
 from typing import Any
+from strands import tool
 import httpx
-from mcp.server.fastmcp import FastMCP
 import asyncio
-
-# Initialize FastMCP server
-mcp = FastMCP("clinical_summary")
 
 FHIR_BASE = "https://hapi.fhir.org/baseR4"
 USER_AGENT = "my-mcp-client"
@@ -53,15 +50,14 @@ def format_section(title: str, items: list[str]) -> str:
     return f"\n\n🔹 {title} 🔹\n" + ("\n".join(items) if items else "None found.")
 
 # -------------------------------
-# CLINICAL SUMMARY TOOL (No Filtering)
+# TOOL FUNCTION
 # -------------------------------
-@mcp.tool()
+@tool
 async def get_clinical_summary_by_patient_id(patient_id: str) -> str:
     patient = await fetch_fhir_patient(patient_id)
     if not patient:
         return "❌ Patient not found."
 
-    # Run all resource fetches concurrently
     results = await asyncio.gather(
         fetch_fhir_resource("Encounter", {"_patient": patient_id}),
         fetch_fhir_resource("Condition", {"_patient": patient_id}),
@@ -97,10 +93,7 @@ async def get_clinical_summary_by_patient_id(patient_id: str) -> str:
 
     return "\n".join(output)
 
-
 # -------------------------------
-# ENTRY POINT
+# Export tools list for Lambda
 # -------------------------------
-if __name__ == "__main__":
-    print("MCP starting...", flush=True)
-    mcp.run(transport="stdio")
+tools = [get_clinical_summary_by_patient_id]

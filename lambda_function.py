@@ -1,36 +1,29 @@
-import asyncio
+import os
 from strands import Agent
-from mcp import stdio_client, StdioServerParameters
-from strands.tools.mcp.mcp_client import MCPClient
-
-# Suppress Windows asyncio pipe warnings
-def suppress_windows_asyncio_pipe_warning():
-    if hasattr(asyncio, 'windows_utils'):
-        original_fileno = asyncio.windows_utils.PipeHandle.fileno
-        def safe_fileno(self):
-            try:
-                return original_fileno(self)
-            except ValueError:
-                return -1
-        asyncio.windows_utils.PipeHandle.fileno = safe_fileno
-
-suppress_windows_asyncio_pipe_warning()
+from getPatient import tools  # Assume this is a list of @tool-decorated functions
 
 def lambda_handler(event, context):
     """
-    Lambda entry point.
+    AWS Lambda entry point.
 
-    Expects event["message"] to contain user input string.
+    Expects:
+        event["message"]: the user prompt to send to the agent
     """
 
-    # Load system prompt
-    with open("systemprompt.txt", "r") as prompt_file:
-        system_prompt = prompt_file.read().strip()
+    # Load the system prompt from environment variable or fallback file
+    system_prompt = os.environ.get("SYSTEM_PROMPT", "")
 
-    # Start MCP client and agent
-    params = StdioServerParameters(command="python", args=["getPatient.py"])
-    with MCPClient(lambda: stdio_client(params)) as mcp_client:
-        tools = mcp_client.list_tools_sync()
+    if not system_prompt:
+        try:
+            with open("systemprompt.txt", "r") as prompt_file:
+                system_prompt = prompt_file.read().strip()
+        except FileNotFoundError:
+            return {
+                "statusCode": 500,
+                "error": "Missing system prompt"
+            }
+
+    try:
         agent = Agent(tools=tools, system_prompt=system_prompt)
 
         user_message = event.get("message", "Hello, what can you do?")
@@ -40,4 +33,9 @@ def lambda_handler(event, context):
         return {
             "statusCode": 200,
             "response": getattr(result, "text", str(result))
+        }
+    except Exception as e:
+        return {
+            "statusCode": 500,
+            "error": str(e)
         }
