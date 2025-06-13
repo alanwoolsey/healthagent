@@ -1,60 +1,40 @@
-import asyncio
-import time
+# lambda_function.py
 
-RESOURCE_TYPES = [
-    ("Encounter", "type"),
-    ("Condition", "code"),
-    ("Observation", "code"),
-    ("DiagnosticReport", "code"),
-    ("Procedure", "code"),
-    ("MedicationStatement", "medicationCodeableConcept"),
-    ("AllergyIntolerance", "code"),
-    ("FamilyMemberHistory", "relationship")
-]
+import os
+import json
+from strands import Agent
+from getPatient import tools  # your imported tools
 
-# Task wrapper
-async def fetch_task(resource: str, patient_id: str):
-    return resource, await fetch_fhir_resource(resource, {"_patient": patient_id, "_count": "5"})
+def lambda_handler(event, context):
+    try:
+        # Load system prompt
+        system_prompt = os.environ.get("SYSTEM_PROMPT", "")
+        if not system_prompt:
+            with open("systemprompt.txt", "r") as f:
+                system_prompt = f.read().strip()
 
-@tool
-async def get_clinical_summary_by_patient_id(patient_id: str) -> str:
-    start = time.perf_counter()
-
-    patient = await fetch_fhir_patient(patient_id)
-    if not patient:
-        return "❌ Patient not found."
-
-    tasks = [asyncio.create_task(fetch_task(res, patient_id)) for res, _ in RESOURCE_TYPES]
-
-    completed: dict[str, list[dict[str, Any]]] = {}
-    timeout = 20.0  # seconds
-
-    while tasks and (time.perf_counter() - start) < timeout:
-        done, pending = await asyncio.wait(tasks, timeout=1.0, return_when=asyncio.FIRST_COMPLETED)
-        for task in done:
-            try:
-                res_type, data = task.result()
-                completed[res_type] = data
-            except Exception:
-                pass
-        tasks = list(pending)
-
-    def fmt(items: list[dict[str, Any]], title: str, key: str, fallback: str = "Unknown") -> str:
-        lines = [
-            f"{title} {i+1}: {item.get(key, {}).get('text', fallback)}"
-            for i, item in enumerate(items)
-        ]
-        return format_section(title, lines)
-
-    output = [
-        f"📘 CLINICAL SUMMARY (partial after {time.perf_counter()-start:.1f}s)",
-        format_patient(patient)
-    ]
-
-    for res_type, key in RESOURCE_TYPES:
-        if res_type in completed:
-            output.append(fmt(completed[res_type], res_type, key))
+        # Parse user input
+        if "body" in event:
+            body = json.loads(event["body"])
         else:
-            output.append(f"\n\n🔹 {res_type} 🔹\n⏳ Timed out.")
+            body = event
+        user_message = body.get("message", "Hello!")
 
-    return "\n".join(output)
+        # Instantiate agent with tools
+        agent = Agent(tools=tools, system_prompt=system_prompt)
+        result = agent(user_message)
+
+        return {
+            "statusCode": 200,
+            "headers": {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*"
+            },
+            "body": json.dumps({ "response": getattr(result, "text", str(result)) })
+        }
+
+    except Exception as e:
+        return {
+            "statusCode": 500,
+            "body": json.dumps({ "error": str(e) })
+        }
