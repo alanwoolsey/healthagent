@@ -1,6 +1,8 @@
 import os
+import asyncio
 from strands import Agent
-from getPatient import tools  # Assume this is a list of @tool-decorated functions
+from getPatient import tools  # This includes async @tool(s)
+import json
 
 def lambda_handler(event, context):
     """
@@ -10,7 +12,7 @@ def lambda_handler(event, context):
         event["message"]: the user prompt to send to the agent
     """
 
-    # Load the system prompt from environment variable or fallback file
+    # Load system prompt from env var or fallback to file
     system_prompt = os.environ.get("SYSTEM_PROMPT", "")
 
     if not system_prompt:
@@ -20,7 +22,7 @@ def lambda_handler(event, context):
         except FileNotFoundError:
             return {
                 "statusCode": 500,
-                "error": "Missing system prompt"
+                "body": "Missing system prompt"
             }
 
     try:
@@ -28,14 +30,25 @@ def lambda_handler(event, context):
 
         user_message = event.get("message", "Hello, what can you do?")
         prompt = f"System: {system_prompt}\nUser: {user_message}"
-        result = agent(prompt)
+
+        # Force async agent execution synchronously
+        result = asyncio.run(agent.achat(prompt))  # `achat` = async chat (if available)
 
         return {
             "statusCode": 200,
-            "response": getattr(result, "text", str(result))
+            "headers": {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*"
+            },
+            "body": json.dumps({ "response": getattr(result, "text", str(result)) })
         }
+
     except Exception as e:
         return {
             "statusCode": 500,
-            "error": str(e)
+            "headers": {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*"
+            },
+            "body": json.dumps({ "error": str(e) })
         }
