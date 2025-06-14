@@ -3,11 +3,11 @@ name: Deploy to ECS via Fargate
 on:
   push:
     branches: [ main ]
-  workflow_dispatch:  # Allow manual runs from the GitHub UI
+  workflow_dispatch:
 
 jobs:
   deploy:
-    name: Build Docker, Push to ECR, Deploy Infra
+    name: Build Docker, Push to ECR, Plan & Apply Infra
     runs-on: ubuntu-latest
 
     steps:
@@ -19,7 +19,7 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-2  # Change if needed
+          aws-region: us-east-2
 
       - name: Login to Amazon ECR
         id: login-ecr
@@ -35,8 +35,22 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
-      - name: Deploy Infrastructure with Terraform
+      - name: Terraform Init & Plan
+        id: tfplan
         run: |
           cd infra
-          terraform init
-          terraform apply -auto-approve
+          terraform init -input=false
+          terraform plan -input=false -out=plan.out > plan.txt
+          if grep -q "No changes. Infrastructure is up-to-date." plan.txt; then
+            echo "No changes detected, skipping apply"
+            echo "SKIP_APPLY=true" >> $GITHUB_ENV
+          else
+            echo "Changes detected, will apply"
+            echo "SKIP_APPLY=false" >> $GITHUB_ENV
+          fi
+
+      - name: Terraform Apply
+        if: env.SKIP_APPLY == 'false'
+        run: |
+          cd infra
+          terraform apply -auto-approve plan.out
