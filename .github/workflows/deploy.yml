@@ -1,4 +1,4 @@
-name: Deploy to ECS via Fargate
+name: Deploy Docker to ECS
 
 on:
   push:
@@ -7,9 +7,7 @@ on:
 
 jobs:
   deploy:
-    name: Build Docker, Push to ECR, Plan & Apply Infra
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -26,31 +24,30 @@ jobs:
         uses: aws-actions/amazon-ecr-login@v1
 
       - name: Build, Tag, and Push Docker image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         run: |
-          IMAGE_URI=${{ steps.login-ecr.outputs.registry }}/health-agent:latest
-          echo "Building and pushing image: $IMAGE_URI"
+          IMAGE_URI=$ECR_REGISTRY/health-agent:latest
+          echo "IMAGE_URI=$IMAGE_URI" >> $GITHUB_ENV
           docker build -t $IMAGE_URI .
           docker push $IMAGE_URI
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-
-      - name: Terraform Init & Plan
-        id: tfplan
+      - name: Register new ECS Task Definition revision
         run: |
-          cd infra
-          terraform init -input=false
-          terraform plan -input=false -out=plan.out > plan.txt
-          if grep -q "No changes. Infrastructure is up-to-date." plan.txt; then
-            echo "No changes detected, skipping apply"
-            echo "SKIP_APPLY=true" >> $GITHUB_ENV
-          else
-            echo "Changes detected, will apply"
-            echo "SKIP_APPLY=false" >> $GITHUB_ENV
-          fi
+          TASK_DEF=$(aws ecs describe-task-definition --task-definition agent-task)
+          NEW_TASK_DEF=$(echo $TASK_DEF | jq --arg IMAGE "$IMAGE_URI" \
+            '.taskDefinition | 
+            {family, networkMode, containerDefinitions, requiresCompatibilities, cpu, memory, executionRoleArn} |
+            .containerDefinitions[0].image = $IMAGE |
+            {family, networkMode, containerDefinitions, requiresCompatibilities, cpu, memory, executionRoleArn}')
+          echo "$NEW_TASK_DEF" > new-task-def.json
+          aws ecs register-task-definition --cli-input-json file://new-task-def.json
 
-      - name: Terraform Apply
-        if: env.SKIP_APPLY == 'false'
+      - name: Update ECS Service to use new Task Definition
         run: |
-          cd infra
-          terraform apply -auto-approve plan.out
+          NEW_TASK_DEF_ARN=$(aws ecs describe-task-definition --task-definition agent-task \
+            --query 'taskDefinition.taskDefinitionArn' --output text)
+          aws ecs update-service \
+            --cluster agent-cluster \
+            --service agent-service \
+            --task-definition $NEW_TASK_DEF_ARN
