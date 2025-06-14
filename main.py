@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from strands import Agent
 from mcp import stdio_client, StdioServerParameters
 from strands.tools.mcp.mcp_client import MCPClient
+from fastapi.middleware.gzip import GZipMiddleware
 
 # Suppress Windows asyncio pipe warnings (optional, dev use only)
 def suppress_windows_asyncio_pipe_warning():
@@ -35,6 +36,7 @@ agent = Agent(tools=tools, system_prompt=system_prompt)
 
 # Define FastAPI app
 app = FastAPI()
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 print("✅ FastAPI app initialized.")
 
 # Request model
@@ -64,4 +66,10 @@ async def shutdown_event():
 # Run with Uvicorn when executed directly
 if __name__ == "__main__":
     print("🚀 Starting FastAPI server on 0.0.0.0:80")
-    uvicorn.run("main:app", host="0.0.0.0", port=80)
+    uvicorn.run(
+        "main:app",
+        host="0.0.0.0",
+        port=80,
+        timeout_keep_alive=75  # <-- Set keep-alive timeout in seconds
+    )
+
