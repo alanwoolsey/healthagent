@@ -32,25 +32,14 @@ jobs:
           docker build -t $IMAGE_URI .
           docker push $IMAGE_URI
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-
-      - name: Apply Bedrock IAM Task Role
-        run: |
-          cd infra
-          terraform init -input=false
-          terraform apply -auto-approve -target=aws_iam_role.ecs_task_app_role -target=aws_iam_role_policy.ecs_task_app_bedrock_policy
-
       - name: Register new ECS Task Definition revision
         run: |
           TASK_DEF=$(aws ecs describe-task-definition --task-definition agent-task)
-          APP_ROLE_ARN=$(aws iam get-role --role-name ecsTaskAppRole --query 'Role.Arn' --output text)
-          NEW_TASK_DEF=$(echo $TASK_DEF | jq --arg IMAGE "$IMAGE_URI" --arg TASK_ROLE "$APP_ROLE_ARN" \
-            '.taskDefinition |
+          NEW_TASK_DEF=$(echo $TASK_DEF | jq --arg IMAGE "$IMAGE_URI" \
+            '.taskDefinition | 
             {family, networkMode, containerDefinitions, requiresCompatibilities, cpu, memory, executionRoleArn} |
             .containerDefinitions[0].image = $IMAGE |
-            .taskRoleArn = $TASK_ROLE |
-            {family, networkMode, containerDefinitions, requiresCompatibilities, cpu, memory, executionRoleArn, taskRoleArn}')
+            {family, networkMode, containerDefinitions, requiresCompatibilities, cpu, memory, executionRoleArn}')
           echo "$NEW_TASK_DEF" > new-task-def.json
           aws ecs register-task-definition --cli-input-json file://new-task-def.json
 
