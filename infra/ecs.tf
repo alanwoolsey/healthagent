@@ -11,11 +11,12 @@ resource "aws_lb" "app_alb" {
 }
 
 resource "aws_lb_target_group" "app_tg" {
-  name     = "health-agent-tg"
-  port     = 80
-  protocol = "HTTP"
-  vpc_id   = aws_vpc.main.id
+  name        = "health-agent-tg"
+  port        = 80
+  protocol    = "HTTP"
+  vpc_id      = aws_vpc.main.id
   target_type = "ip"
+
   health_check {
     path                = "/health"
     interval            = 30
@@ -37,6 +38,7 @@ resource "aws_lb_listener" "app_listener" {
   }
 }
 
+# IAM role used by ECS/Fargate runtime to pull images, etc.
 resource "aws_iam_role" "ecs_task_execution" {
   name = "ecsTaskExecutionRole"
 
@@ -56,9 +58,25 @@ resource "aws_iam_policy_attachment" "ecs_exec_attach" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
-resource "aws_iam_role_policy" "bedrock_access" {
-  name = "AllowBedrockFullAccess"
-  role = aws_iam_role.ecs_task_execution.id
+# ✅ IAM role for app container to access Bedrock
+resource "aws_iam_role" "ecs_task_app" {
+  name = "ecsTaskAppRole"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [{
+      Effect = "Allow",
+      Principal = {
+        Service = "ecs-tasks.amazonaws.com"
+      },
+      Action = "sts:AssumeRole"
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "ecs_app_bedrock_policy" {
+  name = "ecsAppBedrockPolicy"
+  role = aws_iam_role.ecs_task_app.id
 
   policy = jsonencode({
     Version = "2012-10-17",
@@ -70,19 +88,25 @@ resource "aws_iam_role_policy" "bedrock_access" {
   })
 }
 
+# ECS Task Definition with both roles
 resource "aws_ecs_task_definition" "agent" {
   family                   = "agent-task"
   requires_compatibilities = ["FARGATE"]
-  network_mode            = "awsvpc"
-  cpu                     = "512"
-  memory                  = "1024"
-  execution_role_arn      = aws_iam_role.ecs_task_execution.arn
+  network_mode             = "awsvpc"
+  cpu                      = "512"
+  memory                   = "1024"
+  execution_role_arn       = aws_iam_role.ecs_task_execution.arn
+  task_role_arn            = aws_iam_role.ecs_task_app.arn  # ✅ App can access Bedrock
 
   container_definitions = jsonencode([
     {
-      name      = "agent"
+      name  = "agent"
       image = "443370680070.dkr.ecr.us-east-2.amazonaws.com/health-agent:latest"
-      portMappings = [{ containerPort = 80 }]
+      portMappings = [
+        {
+          containerPort = 80
+        }
+      ]
     }
   ])
 }
