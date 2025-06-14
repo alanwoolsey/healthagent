@@ -66,10 +66,4 @@ async def shutdown_event():
 # Run with Uvicorn when executed directly
 if __name__ == "__main__":
     print("🚀 Starting FastAPI server on 0.0.0.0:80")
-    uvicorn.run(
-        "main:app",
-        host="0.0.0.0",
-        port=80,
-        timeout_keep_alive=75  # <-- Set keep-alive timeout in seconds
-    )
-
+    uvicorn.run("main:app", host="0.0.0.0", port=80)
