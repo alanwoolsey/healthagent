@@ -1,4 +1,6 @@
+fastapi
 strands-agents
 strands-agents-tools
 strands-agents-builder
 mcp
+httpx
