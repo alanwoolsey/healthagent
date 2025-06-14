@@ -1,37 +1,41 @@
-# .github/workflows/deploy.yml
-name: Deploy to ECS
+name: Deploy to ECS via Fargate
 
 on:
   push:
     branches: [ main ]
+  workflow_dispatch:  # Allow manual runs from the GitHub UI
 
 jobs:
   deploy:
-    name: Build and Deploy Docker App
+    name: Build Docker, Push to ECR, Deploy Infra
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Configure AWS Credentials
+      - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-2
+          aws-region: us-east-2  # Change if needed
 
-      - name: Login to ECR
+      - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v1
 
       - name: Build, Tag, and Push Docker image
         run: |
           IMAGE_URI=${{ steps.login-ecr.outputs.registry }}/health-agent:latest
+          echo "Building and pushing image: $IMAGE_URI"
           docker build -t $IMAGE_URI .
           docker push $IMAGE_URI
 
-      - name: Deploy Terraform
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Deploy Infrastructure with Terraform
         run: |
           cd infra
           terraform init
