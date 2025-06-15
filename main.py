@@ -46,9 +46,11 @@ class AskRequest(BaseModel):
 # POST endpoint for agent
 @app.post("/ask")
 async def ask_agent(request: AskRequest):
-    loop = asyncio.get_event_loop()
-    response = await loop.run_in_executor(None, agent, request.message)
-    return {"response": getattr(response, "text", str(response))}
+    try:
+        response = agent(request.message)
+        return {"response": getattr(response, "text", str(response))}
+    except Exception as e:
+        return {"error": str(e)}
 
 # GET endpoint for health check
 @app.get("/health", response_class=PlainTextResponse)
