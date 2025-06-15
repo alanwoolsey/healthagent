@@ -3,32 +3,28 @@ import asyncio
 from strands import Agent
 from mcp import stdio_client, StdioServerParameters
 from strands.tools.mcp.mcp_client import MCPClient
-
-# Suppress Windows asyncio pipe warnings
-def suppress_windows_asyncio_pipe_warning():
-    if hasattr(asyncio, 'windows_utils'):
-        original_fileno = asyncio.windows_utils.PipeHandle.fileno
-        def safe_fileno(self):
-            try:
-                return original_fileno(self)
-            except ValueError:
-                return -1
-        asyncio.windows_utils.PipeHandle.fileno = safe_fileno
-
-suppress_windows_asyncio_pipe_warning()
-
-# Load system prompt
-with open("systemprompt.txt", "r") as prompt_file:
-    system_prompt = prompt_file.read().strip()
+from strands.models import BedrockModel
 
 # MCP client and agent setup
 params = StdioServerParameters(command="python", args=["getPatient.py"])
 mcp_client = MCPClient(lambda: stdio_client(params))
 mcp_client.__enter__()
 
+with open("systemprompt.txt", "r") as prompt_file:
+    system_prompt = prompt_file.read().strip()
+
 try:
     tools = mcp_client.list_tools_sync()
-    agent = Agent(tools=tools, system_prompt=system_prompt)
+    agent_model = BedrockModel(
+        model_id="us.anthropic.claude-3-7-sonnet-20250219-v1:0",
+        temperature=0.3,
+        max_tokens=2000,
+        top_p=0.8,
+    )
+    agent = Agent(
+        model=agent_model,
+        tools=tools, 
+        system_prompt=system_prompt)
 
     print("✅ HealthAgent CLI is ready. Type your message (or type 'exit' to quit).")
 
