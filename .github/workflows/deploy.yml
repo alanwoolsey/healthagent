@@ -8,6 +8,7 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -35,11 +36,33 @@ jobs:
       - name: Register new ECS Task Definition revision
         run: |
           TASK_DEF=$(aws ecs describe-task-definition --task-definition agent-task)
-          NEW_TASK_DEF=$(echo $TASK_DEF | jq --arg IMAGE "$IMAGE_URI" \
-            '.taskDefinition | 
-            {family, networkMode, containerDefinitions, requiresCompatibilities, cpu, memory, executionRoleArn} |
-            .containerDefinitions[0].image = $IMAGE |
-            {family, networkMode, containerDefinitions, requiresCompatibilities, cpu, memory, executionRoleArn}')
+          IMAGE_URI="${{ env.IMAGE_URI }}"
+          TASK_ROLE_ARN="arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/ecsTaskAppRole"
+
+          NEW_TASK_DEF=$(echo "$TASK_DEF" | jq --arg IMAGE "$IMAGE_URI" --arg TASK_ROLE_ARN "$TASK_ROLE_ARN" '
+            .taskDefinition |
+            {
+              family,
+              networkMode,
+              containerDefinitions,
+              requiresCompatibilities,
+              cpu,
+              memory,
+              executionRoleArn,
+              taskRoleArn: $TASK_ROLE_ARN
+            } |
+            (.containerDefinitions[0].image = $IMAGE) |
+            {
+              family,
+              networkMode,
+              containerDefinitions,
+              requiresCompatibilities,
+              cpu,
+              memory,
+              executionRoleArn,
+              taskRoleArn
+            }')
+
           echo "$NEW_TASK_DEF" > new-task-def.json
           aws ecs register-task-definition --cli-input-json file://new-task-def.json
 
@@ -47,6 +70,7 @@ jobs:
         run: |
           NEW_TASK_DEF_ARN=$(aws ecs describe-task-definition --task-definition agent-task \
             --query 'taskDefinition.taskDefinitionArn' --output text)
+
           aws ecs update-service \
             --cluster agent-cluster \
             --service agent-service \
