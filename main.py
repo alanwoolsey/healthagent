@@ -8,6 +8,7 @@ from strands import Agent
 from mcp import stdio_client, StdioServerParameters
 from strands.tools.mcp.mcp_client import MCPClient
 from fastapi.middleware.gzip import GZipMiddleware
+from strands.models import BedrockModel
 
 # Suppress Windows asyncio pipe warnings (optional, dev use only)
 def suppress_windows_asyncio_pipe_warning():
@@ -31,8 +32,15 @@ params = StdioServerParameters(command="python", args=["getPatient.py"])
 mcp_client = MCPClient(lambda: stdio_client(params))
 mcp_client.__enter__()  # Keep session alive
 
+agent_model = BedrockModel(
+    model_id="us.anthropic.claude-3-7-sonnet-20250219-v1:0",
+    temperature=0.3,
+    max_tokens=2000,
+    top_p=0.8,
+)
+
 tools = mcp_client.list_tools_sync()
-agent = Agent(tools=tools, system_prompt=system_prompt)
+agent = Agent(tools=tools, system_prompt=system_prompt, model=agent_model)
 
 # Define FastAPI app
 app = FastAPI()
