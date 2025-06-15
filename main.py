@@ -9,7 +9,7 @@ from mcp import stdio_client, StdioServerParameters
 from strands.tools.mcp.mcp_client import MCPClient
 from fastapi.middleware.gzip import GZipMiddleware
 from strands.models import BedrockModel
-from strands.agent.conversation_manager import SlidingWindowConversationManager
+# from strands.agent.conversation_manager import SlidingWindowConversationManager
 
 # Suppress Windows asyncio pipe warnings (optional, dev use only)
 def suppress_windows_asyncio_pipe_warning():
@@ -40,15 +40,15 @@ agent_model = BedrockModel(
         max_tokens=2000,
         top_p=0.5,
 )
-conversation_manager = SlidingWindowConversationManager(
-    window_size=10,  # Limit history size
-)
+# conversation_manager = SlidingWindowConversationManager(
+#     window_size=10,  # Limit history size
+# )
 agent = Agent(
     model=agent_model,
         tools=tools, 
         system_prompt=system_prompt,
         load_tools_from_directory=False,
-        conversation_manager=conversation_manager
+        # conversation_manager=conversation_manager
 )
 
 # Define FastAPI app
