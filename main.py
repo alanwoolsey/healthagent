@@ -8,8 +8,6 @@ from strands import Agent
 from mcp import stdio_client, StdioServerParameters
 from strands.tools.mcp.mcp_client import MCPClient
 from fastapi.middleware.gzip import GZipMiddleware
-from strands_agents.llms.bedrock import BedrockClaude
-
 
 # Suppress Windows asyncio pipe warnings (optional, dev use only)
 def suppress_windows_asyncio_pipe_warning():
@@ -24,13 +22,6 @@ def suppress_windows_asyncio_pipe_warning():
 
 suppress_windows_asyncio_pipe_warning()
 
-agent_model = BedrockClaude(
-    model="anthropic.claude-3-sonnet-20240229",  # this is the correct Bedrock model ID format
-    temperature=0.3,
-    max_tokens=2000,
-    top_p=0.8,
-)
-
 # Load system prompt from file
 with open("systemprompt.txt", "r") as prompt_file:
     system_prompt = prompt_file.read().strip()
@@ -41,7 +32,7 @@ mcp_client = MCPClient(lambda: stdio_client(params))
 mcp_client.__enter__()  # Keep session alive
 
 tools = mcp_client.list_tools_sync()
-agent = Agent(model=agent_model,tools=tools, system_prompt=system_prompt)
+agent = Agent(tools=tools, system_prompt=system_prompt)
 
 # Define FastAPI app
 app = FastAPI()
