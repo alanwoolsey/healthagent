@@ -14,27 +14,44 @@ HEADERS = {
 }
 
 # -------------------------------
-# UTILITY: FHIR Fetcher
+# Caching (in-memory only)
+# -------------------------------
+patient_cache: dict[str, dict] = {}
+resource_cache: dict[str, list] = {}
+
+# -------------------------------
+# UTILITY: FHIR Fetchers
 # -------------------------------
 async def fetch_fhir_resource(resource: str, params: dict[str, str]) -> list[dict[str, Any]]:
+    key = f"{resource}:{params.get('_patient')}"
+    if key in resource_cache:
+        return resource_cache[key]
+
     url = f"{FHIR_BASE}/{resource}"
     async with httpx.AsyncClient() as client:
         try:
             response = await client.get(url, headers=HEADERS, params=params, timeout=15.0)
             response.raise_for_status()
             bundle = response.json()
-            return [entry["resource"] for entry in bundle.get("entry", [])]
+            entries = [entry["resource"] for entry in bundle.get("entry", [])]
+            resource_cache[key] = entries
+            return entries
         except Exception as e:
             print(f"Error fetching {resource}: {e}")
             return []
 
 async def fetch_fhir_patient(patient_id: str) -> dict[str, Any] | None:
+    if patient_id in patient_cache:
+        return patient_cache[patient_id]
+
     url = f"{FHIR_BASE}/Patient/{patient_id}"
     async with httpx.AsyncClient() as client:
         try:
             response = await client.get(url, headers=HEADERS, timeout=15.0)
             response.raise_for_status()
-            return response.json()
+            patient = response.json()
+            patient_cache[patient_id] = patient
+            return patient
         except Exception as e:
             print(f"Error fetching patient: {e}")
             return None
@@ -53,7 +70,7 @@ def format_section(title: str, items: list[str]) -> str:
     return f"\n\n🔹 {title} 🔹\n" + ("\n".join(items) if items else "None found.")
 
 # -------------------------------
-# CLINICAL SUMMARY TOOL (No Filtering)
+# CLINICAL SUMMARY TOOL
 # -------------------------------
 @mcp.tool()
 async def get_clinical_summary_by_patient_id(patient_id: str) -> str:
@@ -61,7 +78,6 @@ async def get_clinical_summary_by_patient_id(patient_id: str) -> str:
     if not patient:
         return "❌ Patient not found."
 
-    # Run all resource fetches concurrently
     results = await asyncio.gather(
         fetch_fhir_resource("Encounter", {"_patient": patient_id}),
         fetch_fhir_resource("Condition", {"_patient": patient_id}),
@@ -96,7 +112,6 @@ async def get_clinical_summary_by_patient_id(patient_id: str) -> str:
     ]
 
     return "\n".join(output)
-
 
 # -------------------------------
 # ENTRY POINT
