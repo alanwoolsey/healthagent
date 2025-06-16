@@ -34,9 +34,10 @@ mcp_client.__enter__()  # Keep session alive
 
 agent_model = BedrockModel(
     model_id="us.anthropic.claude-3-7-sonnet-20250219-v1:0",
-    temperature=0.3,
-    max_tokens=2000,
-    top_p=0.8,
+    temperature=0,
+    max_tokens_to_sample=200,
+    top_p=0.1,
+    streaming=True
 )
 
 tools = mcp_client.list_tools_sync()
