@@ -10,7 +10,7 @@ from strands.tools.mcp.mcp_client import MCPClient
 from fastapi.middleware.gzip import GZipMiddleware
 from strands.models import BedrockModel
 
-# Suppress Windows asyncio pipe warnings (optional, dev use only)
+# Suppress Windows asyncio pipe warnings (optional)
 def suppress_windows_asyncio_pipe_warning():
     if hasattr(asyncio, 'windows_utils'):
         original_fileno = asyncio.windows_utils.PipeHandle.fileno
@@ -27,21 +27,12 @@ suppress_windows_asyncio_pipe_warning()
 with open("systemprompt.txt", "r") as prompt_file:
     system_prompt = prompt_file.read().strip()
 
-# Start MCP client and Agent
+# Initialize MCP client (tools can be shared)
 params = StdioServerParameters(command="python", args=["getPatient.py"])
 mcp_client = MCPClient(lambda: stdio_client(params))
-mcp_client.__enter__()  # Keep session alive
-
-agent_model = BedrockModel(
-    model_id="us.anthropic.claude-3-7-sonnet-20250219-v1:0",
-    temperature=0,
-    max_tokens_to_sample=200,
-    top_p=0.1,
-    streaming=True
-)
+mcp_client.__enter__()  # Keep session alive across requests
 
 tools = mcp_client.list_tools_sync()
-agent = Agent(tools=tools, system_prompt=system_prompt, model=agent_model)
 
 # Define FastAPI app
 app = FastAPI()
@@ -56,6 +47,22 @@ class AskRequest(BaseModel):
 @app.post("/ask")
 async def ask_agent(request: AskRequest):
     try:
+        # Create a fresh Bedrock model per request to avoid shared token limits
+        agent_model = BedrockModel(
+            model_id="us.anthropic.claude-3-7-sonnet-20250219-v1:0",
+            temperature=0,
+            max_tokens_to_sample=200,
+            top_p=0.1,
+            streaming=True
+        )
+
+        # Instantiate a new Agent per request
+        agent = Agent(
+            tools=tools,
+            system_prompt=system_prompt,
+            model=agent_model
+        )
+
         response = agent(request.message)
         return {"response": getattr(response, "text", str(response))}
     except Exception as e:

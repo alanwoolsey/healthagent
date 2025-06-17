@@ -41,7 +41,7 @@ resource "aws_lb_listener" "app_listener" {
 # IAM role used by ECS/Fargate runtime to pull images, etc.
 resource "aws_iam_role" "ecs_task_execution" {
   name = "ecsTaskExecutionRole"
-
+  
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
     Statement = [{
@@ -61,7 +61,7 @@ resource "aws_iam_policy_attachment" "ecs_exec_attach" {
 # ✅ IAM role for app container to access Bedrock
 resource "aws_iam_role" "ecs_task_app" {
   name = "ecsTaskAppRole"
-
+  
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
     Statement = [{
@@ -77,7 +77,7 @@ resource "aws_iam_role" "ecs_task_app" {
 resource "aws_iam_role_policy" "ecs_app_bedrock_policy" {
   name = "ecsAppBedrockPolicy"
   role = aws_iam_role.ecs_task_app.id
-
+  
   policy = jsonencode({
     Version = "2012-10-17",
     Statement = [{
