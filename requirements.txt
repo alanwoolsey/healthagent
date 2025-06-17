@@ -1,6 +1,9 @@
 fastapi
+uvicorn[standard]
 strands-agents
 strands-agents-tools
 strands-agents-builder
 mcp
 httpx
+botocore
+pydantic
